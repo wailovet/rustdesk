@@ -84,9 +84,9 @@ RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
 RUN mkdir -p /opt \
     && curl -fsSL -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz \
     && tar -xJf /tmp/flutter.tar.xz -C /opt \
-    && mv /opt/flutter /opt/flutter \
-    && rm /tmp/flutter.tar.xz \
-    && flutter doctor -v \
+    && rm /tmp/flutter.tar.xz
+
+RUN flutter doctor -v \
     && flutter precache --android
 
 RUN mkdir -p /opt/android/cmdline-tools \
