@@ -3,7 +3,6 @@ FROM ubuntu:24.04
 ARG DEBIAN_FRONTEND=noninteractive
 ARG RUST_VERSION=1.75
 ARG CARGO_NDK_VERSION=3.1.2
-ARG NDK_VERSION=r27c
 ARG FLUTTER_VERSION=3.24.5
 ARG VCPKG_COMMIT_ID=120deac3062162151622ca4860575a33844ba10b
 ARG ANDROID_SDK_PLATFORM=34
@@ -77,37 +76,43 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
-    && sh /tmp/rustup-init.sh -y --default-toolchain ${RUST_VERSION} \
+RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh
+
+RUN sh /tmp/rustup-init.sh -y --default-toolchain ${RUST_VERSION} \
     && rm /tmp/rustup-init.sh
 
 RUN mkdir -p /opt \
-    && curl -fsSL -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz \
-    && tar -xJf /tmp/flutter.tar.xz -C /opt \
+    && curl -fsSL -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz
+
+RUN tar -xJf /tmp/flutter.tar.xz -C /opt \
     && rm /tmp/flutter.tar.xz
 
 RUN flutter doctor -v \
     && flutter precache --android
 
 RUN mkdir -p /opt/android/cmdline-tools \
-    && curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-    && unzip -q /tmp/cmdline-tools.zip -d /opt/android/cmdline-tools \
+    && curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+
+RUN unzip -q /tmp/cmdline-tools.zip -d /opt/android/cmdline-tools \
     && mv /opt/android/cmdline-tools/cmdline-tools /opt/android/cmdline-tools/latest \
-    && rm /tmp/cmdline-tools.zip \
-    && yes | sdkmanager --licenses \
+    && rm /tmp/cmdline-tools.zip
+
+RUN yes | sdkmanager --licenses \
     && sdkmanager \
        "platform-tools" \
        "platforms;android-${ANDROID_SDK_PLATFORM}" \
-       "build-tools;${ANDROID_BUILD_TOOLS}" \
-       "ndk;${NDK_VERSION}"
+       # NDK r27c (27.2.12479018)
+       "ndk;27.2.12479018"
 
+ENV NDK_VERSION=27.2.12479018
 ENV ANDROID_NDK_HOME=/opt/android/ndk/${NDK_VERSION}
 ENV ANDROID_NDK_ROOT=/opt/android/ndk/${NDK_VERSION}
 
 RUN mkdir -p /opt/artifacts \
     && cd /opt/artifacts \
-    && git clone https://github.com/microsoft/vcpkg \
-    && cd /opt/artifacts/vcpkg \
+    && git clone https://github.com/microsoft/vcpkg
+
+RUN cd /opt/artifacts/vcpkg \
     && git reset --hard ${VCPKG_COMMIT_ID} \
     && ./bootstrap-vcpkg.sh -disableMetrics
 
