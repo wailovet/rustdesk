@@ -18,6 +18,8 @@ ARG STORE_PASSWORD=android
 
 ENV http_proxy=$http_proxy
 ENV https_proxy=$https_proxy
+ENV HTTP_PROXY=$http_proxy
+ENV HTTPS_PROXY=$https_proxy
 ENV no_proxy=$no_proxy
 ENV KEY_ALIAS=$KEY_ALIAS
 ENV KEY_PASSWORD=$KEY_PASSWORD
