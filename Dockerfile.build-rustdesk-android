@@ -95,13 +95,20 @@ RUN mkdir -p /opt/artifacts \
     && git reset --hard ${VCPKG_COMMIT_ID} \
     && ./bootstrap-vcpkg.sh -disableMetrics
 
+# Pre-cache vcpkg dependencies and cargo tools
+COPY vcpkg.json /tmp/vcpkg.json
+COPY flutter/build_android_deps.sh /tmp/flutter/build_android_deps.sh
+RUN chmod +x /tmp/flutter/build_android_deps.sh \
+    && sed -i 's|SCRIPTDIR="$(readlink -f "$0")"|SCRIPTDIR="/tmp/flutter"|g' /tmp/flutter/build_android_deps.sh \
+    && /tmp/flutter/build_android_deps.sh arm64-v8a \
+    && rustup target add aarch64-linux-android \
+    && cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked \
+    && rm -rf /tmp/vcpkg.json /tmp/flutter
+
 WORKDIR /workspace
 COPY . /workspace
 
 RUN git submodule update --init --recursive \
-    && rustup target add aarch64-linux-android \
-    && cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked \
-    && ./flutter/build_android_deps.sh arm64-v8a \
     && ./flutter/ndk_arm64.sh \
     && sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties \
     && sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle \
