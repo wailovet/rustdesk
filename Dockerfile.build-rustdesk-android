@@ -16,6 +16,15 @@ ENV ANDROID_HOME=/opt/android
 ENV VCPKG_ROOT=/opt/artifacts/vcpkg
 ENV PATH=/opt/flutter/bin:/root/.cargo/bin:/opt/android/cmdline-tools/latest/bin:/opt/android/platform-tools:$PATH
 
+RUN if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+        sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list.d/ubuntu.sources; \
+        sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list.d/ubuntu.sources; \
+        sed -i 's/ports.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list.d/ubuntu.sources; \
+    elif [ -f /etc/apt/sources.list ]; then \
+        sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list; \
+        sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list; \
+    fi
+
 RUN apt-get update && apt-get install -y \
     clang \
     cmake \
