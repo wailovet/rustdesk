@@ -1,0 +1,106 @@
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG RUST_VERSION=1.75
+ARG CARGO_NDK_VERSION=3.1.2
+ARG NDK_VERSION=r27c
+ARG FLUTTER_VERSION=3.24.5
+ARG VCPKG_COMMIT_ID=120deac3062162151622ca4860575a33844ba10b
+ARG ANDROID_SDK_PLATFORM=34
+ARG ANDROID_BUILD_TOOLS=34.0.0
+
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV ANDROID_SDK_ROOT=/opt/android
+ENV ANDROID_HOME=/opt/android
+ENV VCPKG_ROOT=/opt/artifacts/vcpkg
+ENV PATH=/opt/flutter/bin:/root/.cargo/bin:/opt/android/cmdline-tools/latest/bin:/opt/android/platform-tools:$PATH
+
+RUN apt-get update && apt-get install -y \
+    clang \
+    cmake \
+    curl \
+    gcc-multilib \
+    git \
+    g++ \
+    g++-multilib \
+    libayatana-appindicator3-dev \
+    libasound2-dev \
+    libc6-dev \
+    libclang-dev \
+    libunwind-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgtk-3-dev \
+    libpam0g-dev \
+    libpulse-dev \
+    libva-dev \
+    libxcb-randr0-dev \
+    libxcb-shape0-dev \
+    libxcb-xfixes0-dev \
+    libxdo-dev \
+    libxfixes-dev \
+    llvm-dev \
+    nasm \
+    ninja-build \
+    openjdk-17-jdk-headless \
+    pkg-config \
+    python3 \
+    python3-pip \
+    unzip \
+    wget \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
+    && sh /tmp/rustup-init.sh -y --default-toolchain ${RUST_VERSION} \
+    && rm /tmp/rustup-init.sh
+
+RUN mkdir -p /opt \
+    && curl -fsSL -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz \
+    && tar -xJf /tmp/flutter.tar.xz -C /opt \
+    && mv /opt/flutter /opt/flutter \
+    && rm /tmp/flutter.tar.xz \
+    && flutter doctor -v \
+    && flutter precache --android
+
+RUN mkdir -p /opt/android/cmdline-tools \
+    && curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+    && unzip -q /tmp/cmdline-tools.zip -d /opt/android/cmdline-tools \
+    && mv /opt/android/cmdline-tools/cmdline-tools /opt/android/cmdline-tools/latest \
+    && rm /tmp/cmdline-tools.zip \
+    && yes | sdkmanager --licenses \
+    && sdkmanager \
+       "platform-tools" \
+       "platforms;android-${ANDROID_SDK_PLATFORM}" \
+       "build-tools;${ANDROID_BUILD_TOOLS}" \
+       "ndk;${NDK_VERSION}"
+
+ENV ANDROID_NDK_HOME=/opt/android/ndk/${NDK_VERSION}
+ENV ANDROID_NDK_ROOT=/opt/android/ndk/${NDK_VERSION}
+
+RUN mkdir -p /opt/artifacts \
+    && cd /opt/artifacts \
+    && git clone https://github.com/microsoft/vcpkg \
+    && cd /opt/artifacts/vcpkg \
+    && git reset --hard ${VCPKG_COMMIT_ID} \
+    && ./bootstrap-vcpkg.sh -disableMetrics
+
+WORKDIR /workspace
+COPY . /workspace
+
+RUN git submodule update --init --recursive \
+    && rustup target add aarch64-linux-android \
+    && cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked \
+    && ./flutter/build_android_deps.sh arm64-v8a \
+    && ./flutter/ndk_arm64.sh \
+    && sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties \
+    && sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle \
+    && mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a \
+    && cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/ \
+    && cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so \
+    && pushd flutter \
+    && flutter build apk --release --target-platform android-arm64 --split-per-abi \
+    && popd
+
+CMD ["/bin/bash"]

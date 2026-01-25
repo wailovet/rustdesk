@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hbb/common/widgets/remote_input.dart';
@@ -11,6 +12,9 @@ enum GestureState {
 }
 
 class CustomTouchGestureRecognizer extends ScaleGestureRecognizer {
+  static const double _twoFingerSameDirAngleThresholdDeg = 45.0;
+  final Map<int, Offset> _pointerPositions = <int, Offset>{};
+  final Map<int, Offset> _pointerPrevPositions = <int, Offset>{};
   CustomTouchGestureRecognizer({
     Object? debugOwner,
     Set<PointerDeviceKind>? supportedDevices,
@@ -117,6 +121,53 @@ class CustomTouchGestureRecognizer extends ScaleGestureRecognizer {
         _currentState = GestureState.none;
       });
     };
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    _trackTwoFingerDirection(event);
+    super.handleEvent(event);
+  }
+
+  void _trackTwoFingerDirection(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      _pointerPositions[event.pointer] = event.position;
+      _pointerPrevPositions[event.pointer] = event.position;
+      return;
+    }
+    if (event is PointerMoveEvent) {
+      _pointerPositions[event.pointer] = event.position;
+      if (_pointerPositions.length != 2) {
+        return;
+      }
+      final entries = _pointerPositions.entries.toList(growable: false);
+      final p1 = entries[0].value;
+      final p2 = entries[1].value;
+      final prev1 = _pointerPrevPositions[entries[0].key] ?? p1;
+      final prev2 = _pointerPrevPositions[entries[1].key] ?? p2;
+      final v1 = p1 - prev1;
+      final v2 = p2 - prev2;
+      final v1Len = v1.distance;
+      final v2Len = v2.distance;
+      if (v1Len == 0 || v2Len == 0) {
+        return;
+      }
+      final cosValue = ((v1.dx * v2.dx + v1.dy * v2.dy) / (v1Len * v2Len))
+          .clamp(-1.0, 1.0);
+      final angleDeg = acos(cosValue) * 180 / pi;
+      isTwoFingerSameDirection =
+          angleDeg <= _twoFingerSameDirAngleThresholdDeg;
+      _pointerPrevPositions[entries[0].key] = p1;
+      _pointerPrevPositions[entries[1].key] = p2;
+      return;
+    }
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _pointerPositions.remove(event.pointer);
+      _pointerPrevPositions.remove(event.pointer);
+      if (_pointerPositions.length < 2) {
+        isTwoFingerSameDirection = false;
+      }
+    }
   }
 
   // FIXME: This debounce logic is not working properly.

@@ -58,6 +58,9 @@ bool isSpecialHoldDragActive = false;
 // Cache the last focal point to calculate deltas in special hold-drag mode.
 Offset _lastSpecialHoldDragFocalPoint = Offset.zero;
 
+// Two-finger direction marker from CustomTouchGestureRecognizer.
+bool isTwoFingerSameDirection = false;
+
 class RawTouchGestureDetectorRegion extends StatefulWidget {
   final Widget child;
   final FFI ffi;
@@ -464,6 +467,10 @@ class _RawTouchGestureDetectorRegionState
       }
     } else {
       // mobile
+      if (isTwoFingerSameDirection) {
+        _applyVerticalScrollFromDelta(d.focalPointDelta);
+        return;
+      }
       ffi.canvasModel.updateScale(d.scale / _scale, d.focalPoint);
       _scale = d.scale;
       ffi.canvasModel.panX(d.focalPointDelta.dx);
@@ -496,15 +503,22 @@ class _RawTouchGestureDetectorRegionState
   get onThreeFingerVerticalDragUpdate => ffi.ffiModel.isPeerAndroid
       ? null
       : (d) {
-          _mouseScrollIntegral += d.delta.dy / 4;
-          if (_mouseScrollIntegral > 1) {
-            inputModel.scroll(1);
-            _mouseScrollIntegral = 0;
-          } else if (_mouseScrollIntegral < -1) {
-            inputModel.scroll(-1);
-            _mouseScrollIntegral = 0;
-          }
+          _applyVerticalScrollFromDelta(d.delta);
         };
+
+  void _applyVerticalScrollFromDelta(Offset delta) {
+    if (ffi.ffiModel.isPeerAndroid) {
+      return;
+    }
+    _mouseScrollIntegral += delta.dy / 4;
+    if (_mouseScrollIntegral > 1) {
+      inputModel.scroll(1);
+      _mouseScrollIntegral = 0;
+    } else if (_mouseScrollIntegral < -1) {
+      inputModel.scroll(-1);
+      _mouseScrollIntegral = 0;
+    }
+  }
 
   makeGestures(BuildContext context) {
     return <Type, GestureRecognizerFactory>{
