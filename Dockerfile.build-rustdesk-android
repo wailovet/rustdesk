@@ -9,6 +9,20 @@ ARG VCPKG_COMMIT_ID=120deac3062162151622ca4860575a33844ba10b
 ARG ANDROID_SDK_PLATFORM=34
 ARG ANDROID_BUILD_TOOLS=34.0.0
 
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+ARG KEY_ALIAS=android
+ARG KEY_PASSWORD=android
+ARG STORE_PASSWORD=android
+
+ENV http_proxy=$http_proxy
+ENV https_proxy=$https_proxy
+ENV no_proxy=$no_proxy
+ENV KEY_ALIAS=$KEY_ALIAS
+ENV KEY_PASSWORD=$KEY_PASSWORD
+ENV STORE_PASSWORD=$STORE_PASSWORD
+
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV ANDROID_SDK_ROOT=/opt/android
@@ -61,11 +75,13 @@ RUN apt-get update && apt-get install -y \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
+RUN curl --head --fail --silent --show-error https://sh.rustup.rs >/dev/null \
+    && curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && sh /tmp/rustup-init.sh -y --default-toolchain ${RUST_VERSION} \
     && rm /tmp/rustup-init.sh
 
 RUN mkdir -p /opt \
+    && curl --head --fail --silent --show-error https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz >/dev/null \
     && curl -fsSL -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz \
     && tar -xJf /tmp/flutter.tar.xz -C /opt \
     && mv /opt/flutter /opt/flutter \
@@ -74,6 +90,7 @@ RUN mkdir -p /opt \
     && flutter precache --android
 
 RUN mkdir -p /opt/android/cmdline-tools \
+    && curl --head --fail --silent --show-error https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip >/dev/null \
     && curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
     && unzip -q /tmp/cmdline-tools.zip -d /opt/android/cmdline-tools \
     && mv /opt/android/cmdline-tools/cmdline-tools /opt/android/cmdline-tools/latest \
@@ -90,6 +107,7 @@ ENV ANDROID_NDK_ROOT=/opt/android/ndk/${NDK_VERSION}
 
 RUN mkdir -p /opt/artifacts \
     && cd /opt/artifacts \
+    && curl --head --fail --silent --show-error https://github.com/microsoft/vcpkg >/dev/null \
     && git clone https://github.com/microsoft/vcpkg \
     && cd /opt/artifacts/vcpkg \
     && git reset --hard ${VCPKG_COMMIT_ID} \
@@ -111,7 +129,11 @@ COPY . /workspace
 RUN git submodule update --init --recursive \
     && ./flutter/ndk_arm64.sh \
     && sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties \
-    && sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle \
+    && keytool -genkey -v -keystore ./flutter/android/app/key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias $KEY_ALIAS -storepass $STORE_PASSWORD -keypass $KEY_PASSWORD -dname "CN=Android Debug,O=Android,C=US" \
+    && echo "storeFile=key.jks" > ./flutter/android/key.properties \
+    && echo "storePassword=$STORE_PASSWORD" >> ./flutter/android/key.properties \
+    && echo "keyAlias=$KEY_ALIAS" >> ./flutter/android/key.properties \
+    && echo "keyPassword=$KEY_PASSWORD" >> ./flutter/android/key.properties \
     && mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a \
     && cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/ \
     && cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so \
