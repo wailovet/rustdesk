@@ -90,6 +90,8 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 ///   HoldDrag -> left drag
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
+  // Two-finger scroll mode marker
+  bool isTwoFingerScrollMode = false;
   Offset _cacheLongPressPosition = Offset(0, 0);
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
@@ -467,7 +469,11 @@ class _RawTouchGestureDetectorRegionState
       }
     } else {
       // mobile
+      // If we are in scroll mode, we should lock it until the gesture ends.
       if (isTwoFingerSameDirection) {
+        isTwoFingerScrollMode = true;
+      }
+      if (isTwoFingerScrollMode) {
         _applyVerticalScrollFromDelta(d.focalPointDelta);
         return;
       }
@@ -491,6 +497,7 @@ class _RawTouchGestureDetectorRegionState
     } else {
       // mobile
       _scale = 1;
+      isTwoFingerScrollMode = false;
       // No idea why we need to set the view style to "" here.
       // bind.sessionSetViewStyle(sessionId: sessionId, value: "");
     }
