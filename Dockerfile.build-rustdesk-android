@@ -120,8 +120,11 @@ RUN cd /opt/artifacts/vcpkg \
 # Pre-cache vcpkg dependencies and cargo tools
 COPY vcpkg.json /tmp/vcpkg.json
 COPY flutter/build_android_deps.sh /tmp/flutter/build_android_deps.sh
+# Fix script path to find vcpkg.json in /tmp
 RUN chmod +x /tmp/flutter/build_android_deps.sh \
     && sed -i 's|SCRIPTDIR="$(readlink -f "$0")"|SCRIPTDIR="/tmp/flutter"|g' /tmp/flutter/build_android_deps.sh \
+    && sed -i 's|if \[ ! -f "$SCRIPTDIR/../vcpkg.json" \]; then|if [ ! -f "$SCRIPTDIR/../vcpkg.json" ] \&\& [ ! -f "/tmp/vcpkg.json" ]; then|g' /tmp/flutter/build_android_deps.sh \
+    && sed -i 's|pushd "$SCRIPTDIR/.."|pushd "/tmp"|g' /tmp/flutter/build_android_deps.sh \
     && /tmp/flutter/build_android_deps.sh arm64-v8a \
     && rustup target add aarch64-linux-android \
     && cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked \
