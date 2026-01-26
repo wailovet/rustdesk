@@ -40,18 +40,6 @@ docker run --rm -it \
   -e STORE_PASSWORD="${STORE_PASSWORD}" \
   "${IMAGE_NAME}" \
   /bin/bash -c "
-    git config --global --add safe.directory '*' && \
-    git submodule update --init --recursive && \
-    ./flutter/ndk_arm64.sh && \
-    sed -i 's/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g' ./flutter/android/gradle.properties && \
-    keytool -genkey -v -keystore ./flutter/android/app/key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias \$KEY_ALIAS -storepass \$STORE_PASSWORD -keypass \$KEY_PASSWORD -dname 'CN=Android Debug,O=Android,C=US' && \
-    echo 'storeFile=key.jks' > ./flutter/android/key.properties && \
-    echo 'storePassword='\$STORE_PASSWORD >> ./flutter/android/key.properties && \
-    echo 'keyAlias='\$KEY_ALIAS >> ./flutter/android/key.properties && \
-    echo 'keyPassword='\$KEY_PASSWORD >> ./flutter/android/key.properties && \
-    mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a && \
-    cp \${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/ && \
-    cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so && \
     cd flutter && \
     flutter build apk --release --target-platform android-arm64 --split-per-abi
   "
