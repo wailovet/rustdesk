@@ -108,6 +108,7 @@ RUN yes | sdkmanager --licenses \
 ENV NDK_VERSION=27.2.12479018
 ENV ANDROID_NDK_HOME=/opt/android/ndk/${NDK_VERSION}
 ENV ANDROID_NDK_ROOT=/opt/android/ndk/${NDK_VERSION}
+ENV ANDROID_NDK=${ANDROID_NDK_HOME}
 
 RUN mkdir -p /opt/artifacts \
     && cd /opt/artifacts \
@@ -120,11 +121,10 @@ RUN cd /opt/artifacts/vcpkg \
 # Pre-cache vcpkg dependencies and cargo tools
 COPY vcpkg.json /tmp/vcpkg.json
 COPY flutter/build_android_deps.sh /tmp/flutter/build_android_deps.sh
-# Fix script path to find vcpkg.json in /tmp
+# Fix script path to find vcpkg.json in /tmp by mocking the script location logic
+# SCRIPTDIR="/tmp/flutter/dummy" -> dirname -> "/tmp/flutter" -> ../vcpkg.json -> /tmp/vcpkg.json
 RUN chmod +x /tmp/flutter/build_android_deps.sh \
-    && sed -i 's|SCRIPTDIR="$(readlink -f "$0")"|SCRIPTDIR="/tmp/flutter"|g' /tmp/flutter/build_android_deps.sh \
-    && sed -i 's|if \[ ! -f "$SCRIPTDIR/../vcpkg.json" \]; then|if [ ! -f "$SCRIPTDIR/../vcpkg.json" ] \&\& [ ! -f "/tmp/vcpkg.json" ]; then|g' /tmp/flutter/build_android_deps.sh \
-    && sed -i 's|pushd "$SCRIPTDIR/.."|pushd "/tmp"|g' /tmp/flutter/build_android_deps.sh \
+    && sed -i 's|SCRIPTDIR="$(readlink -f "$0")"|SCRIPTDIR="/tmp/flutter/dummy"|g' /tmp/flutter/build_android_deps.sh \
     && /tmp/flutter/build_android_deps.sh arm64-v8a \
     && rustup target add aarch64-linux-android \
     && cargo install cargo-ndk --version ${CARGO_NDK_VERSION} --locked \
