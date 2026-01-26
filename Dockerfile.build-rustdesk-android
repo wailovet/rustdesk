@@ -143,6 +143,9 @@ RUN flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output 
 RUN ./flutter/ndk_arm64.sh 
 
 
+RUN git config --global --add safe.directory '*'
+
+
 RUN sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties \
     && keytool -genkey -v -keystore ./flutter/android/app/key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias $KEY_ALIAS -storepass $STORE_PASSWORD -keypass $KEY_PASSWORD -dname "CN=Android Debug,O=Android,C=US" \
     && echo "storeFile=key.jks" > ./flutter/android/key.properties \
