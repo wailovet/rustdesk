@@ -34,8 +34,6 @@ fi
 echo "Building Rust library..."
 # Ensure target is added (safe to re-run)
 rustup target add aarch64-linux-android
-# Run the build script
-./flutter/ndk_arm64.sh
 
 # Copy Native Libraries to jniLibs
 echo "Copying native libraries..."
