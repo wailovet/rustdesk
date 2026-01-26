@@ -30,6 +30,32 @@ if [ ! -f "flutter/lib/generated_bridge.dart" ]; then
     flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
 fi
 
+# Build Rust library (since volume mount hides the docker-built artifacts)
+echo "Building Rust library..."
+# Ensure target is added (safe to re-run)
+rustup target add aarch64-linux-android
+# Run the build script
+./flutter/ndk_arm64.sh
+
+# Copy Native Libraries to jniLibs
+echo "Copying native libraries..."
+mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+
+# Copy libc++_shared.so (required by Android NDK)
+if [ -n "$ANDROID_NDK_HOME" ]; then
+    cp "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" ./flutter/android/app/src/main/jniLibs/arm64-v8a/
+else
+    echo "WARNING: ANDROID_NDK_HOME not set, skipping libc++_shared.so copy"
+fi
+
+# Copy librustdesk.so
+if [ -f "./target/aarch64-linux-android/release/liblibrustdesk.so" ]; then
+    cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+else
+    echo "ERROR: liblibrustdesk.so not found! Build failed?"
+    exit 1
+fi
+
 # Build Android APK
 echo "Building Flutter APK..."
 cd flutter
