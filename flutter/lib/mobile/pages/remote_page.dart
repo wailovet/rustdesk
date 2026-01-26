@@ -1029,6 +1029,12 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
       wrap(isMac ? 'Cmd+S' : 'Ctrl+S', () {
         sendPrompt(isMac, 'VK_S');
       }),
+      wrap(isMac ? 'Cmd+Tab' : 'Win+Tab', () {
+        final old = inputModel.command;
+        inputModel.command = true;
+        inputModel.inputKey('VK_TAB');
+        inputModel.command = old;
+      }),
     ];
     final space = size.width > 320 ? 4.0 : 2.0;
     // 500 ms is long enough for this widget to be built!
