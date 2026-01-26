@@ -40,8 +40,8 @@ docker run --rm -it \
   -e STORE_PASSWORD="${STORE_PASSWORD}" \
   "${IMAGE_NAME}" \
   /bin/bash -c "
-    cd flutter && \
-    flutter build apk --release --target-platform android-arm64 --split-per-abi
+    chmod +x use-docker-build-android-inner.sh && \
+    ./use-docker-build-android-inner.sh
   "
 
 echo "Build complete. Check flutter/build/app/outputs/flutter-apk/ for APKs."
