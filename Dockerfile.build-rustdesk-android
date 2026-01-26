@@ -129,9 +129,9 @@ RUN chmod +x ./flutter/build_android_deps.sh \
     && cargo install cargo-expand --version 1.0.95 --locked \
     && cargo install flutter_rust_bridge_codegen --version 1.80.1 --features "uuid" --locked
 
+RUN git submodule update --init --recursive
 
-RUN git submodule update --init --recursive \
-    && cd flutter \
+RUN cd flutter \
     && sed -i -e 's/extended_text: 14.0.0/extended_text: 13.0.0/g' pubspec.yaml \
     && flutter pub get \
     && cd ..
