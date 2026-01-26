@@ -92,6 +92,8 @@ class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
   // Two-finger scroll mode marker
   bool isTwoFingerScrollMode = false;
+  // Two-finger scale mode marker
+  bool isTwoFingerScaleMode = false;
   Offset _cacheLongPressPosition = Offset(0, 0);
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
@@ -470,17 +472,25 @@ class _RawTouchGestureDetectorRegionState
     } else {
       // mobile
       // If we are in scroll mode, we should lock it until the gesture ends.
-      if (isTwoFingerSameDirection) {
-        isTwoFingerScrollMode = true;
+      // Similarly for scale mode.
+      if (!isTwoFingerScrollMode && !isTwoFingerScaleMode) {
+        if (isTwoFingerSameDirection) {
+          isTwoFingerScrollMode = true;
+        } else {
+          isTwoFingerScaleMode = true;
+        }
       }
+
       if (isTwoFingerScrollMode) {
         _applyVerticalScrollFromDelta(d.focalPointDelta);
         return;
       }
-      ffi.canvasModel.updateScale(d.scale / _scale, d.focalPoint);
-      _scale = d.scale;
-      ffi.canvasModel.panX(d.focalPointDelta.dx);
-      ffi.canvasModel.panY(d.focalPointDelta.dy);
+      if (isTwoFingerScaleMode) {
+        ffi.canvasModel.updateScale(d.scale / _scale, d.focalPoint);
+        _scale = d.scale;
+        ffi.canvasModel.panX(d.focalPointDelta.dx);
+        ffi.canvasModel.panY(d.focalPointDelta.dy);
+      }
     }
   }
 
@@ -498,6 +508,7 @@ class _RawTouchGestureDetectorRegionState
       // mobile
       _scale = 1;
       isTwoFingerScrollMode = false;
+      isTwoFingerScaleMode = false;
       // No idea why we need to set the view style to "" here.
       // bind.sessionSetViewStyle(sessionId: sessionId, value: "");
     }
