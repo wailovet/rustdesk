@@ -14,12 +14,14 @@ if [ ! -f "$KEYSTORE_PATH" ]; then
         -dname "CN=Android Debug,O=Android,C=US"
 fi
 
-if [ ! -f "$KEY_PROPS_PATH" ]; then
-    echo "Creating key.properties..."
+# Always ensure key.properties is correct when we have our keystore
+# We use ../upload-keystore.jks because build.gradle resolves relative to app/ directory
+if [ -f "$KEYSTORE_PATH" ]; then
+    echo "Updating key.properties..."
     echo "storePassword=android" > "$KEY_PROPS_PATH"
     echo "keyPassword=android" >> "$KEY_PROPS_PATH"
     echo "keyAlias=android" >> "$KEY_PROPS_PATH"
-    echo "storeFile=upload-keystore.jks" >> "$KEY_PROPS_PATH"
+    echo "storeFile=../upload-keystore.jks" >> "$KEY_PROPS_PATH"
 fi
 
 # Check if generated_bridge.dart exists, if not, regenerate it
