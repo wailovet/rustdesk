@@ -437,6 +437,8 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
+    isTwoFingerScrollMode = false;
+    isTwoFingerScaleMode = false;
     if (isSpecialHoldDragActive) {
       // Initialize the last focal point to calculate deltas manually.
       _lastSpecialHoldDragFocalPoint = d.focalPoint;
@@ -482,7 +484,7 @@ class _RawTouchGestureDetectorRegionState
       }
 
       if (isTwoFingerScrollMode) {
-        _applyVerticalScrollFromDelta(d.focalPointDelta);
+        _applyVerticalScrollFromDelta(-d.focalPointDelta);
         return;
       }
       if (isTwoFingerScaleMode) {
@@ -528,11 +530,12 @@ class _RawTouchGestureDetectorRegionState
     if (ffi.ffiModel.isPeerAndroid) {
       return;
     }
-    _mouseScrollIntegral += delta.dy / 4;
-    if (_mouseScrollIntegral > 1) {
+    _mouseScrollIntegral += delta.dy;
+    // Decrease the threshold to make it more sensitive
+    if (_mouseScrollIntegral > 2.0) {
       inputModel.scroll(1);
       _mouseScrollIntegral = 0;
-    } else if (_mouseScrollIntegral < -1) {
+    } else if (_mouseScrollIntegral < -2.0) {
       inputModel.scroll(-1);
       _mouseScrollIntegral = 0;
     }
