@@ -58,9 +58,6 @@ bool isSpecialHoldDragActive = false;
 // Cache the last focal point to calculate deltas in special hold-drag mode.
 Offset _lastSpecialHoldDragFocalPoint = Offset.zero;
 
-// Two-finger direction marker from CustomTouchGestureRecognizer.
-bool isTwoFingerSameDirection = false;
-
 class RawTouchGestureDetectorRegion extends StatefulWidget {
   final Widget child;
   final FFI ffi;
@@ -90,10 +87,15 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 ///   HoldDrag -> left drag
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
+  // Require several consistent updates before locking a two-finger mode.
+  static const int _twoFingerDirectionConfirmHits = 3;
   // Two-finger scroll mode marker
   bool isTwoFingerScrollMode = false;
   // Two-finger scale mode marker
   bool isTwoFingerScaleMode = false;
+  TwoFingerDirection _twoFingerDirection = TwoFingerDirection.unknown;
+  int _scrollDirectionHits = 0;
+  int _scaleDirectionHits = 0;
   Offset _cacheLongPressPosition = Offset(0, 0);
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
@@ -439,6 +441,8 @@ class _RawTouchGestureDetectorRegionState
     }
     isTwoFingerScrollMode = false;
     isTwoFingerScaleMode = false;
+    _scrollDirectionHits = 0;
+    _scaleDirectionHits = 0;
     if (isSpecialHoldDragActive) {
       // Initialize the last focal point to calculate deltas manually.
       _lastSpecialHoldDragFocalPoint = d.focalPoint;
@@ -473,15 +477,7 @@ class _RawTouchGestureDetectorRegionState
       }
     } else {
       // mobile
-      // If we are in scroll mode, we should lock it until the gesture ends.
-      // Similarly for scale mode.
-      if (!isTwoFingerScrollMode && !isTwoFingerScaleMode) {
-        if (isTwoFingerSameDirection) {
-          isTwoFingerScrollMode = true;
-        } else {
-          isTwoFingerScaleMode = true;
-        }
-      }
+      _updateTwoFingerMode();
 
       if (isTwoFingerScrollMode) {
         _applyVerticalScrollFromDelta(-d.focalPointDelta);
@@ -511,6 +507,8 @@ class _RawTouchGestureDetectorRegionState
       _scale = 1;
       isTwoFingerScrollMode = false;
       isTwoFingerScaleMode = false;
+      _scrollDirectionHits = 0;
+      _scaleDirectionHits = 0;
       // No idea why we need to set the view style to "" here.
       // bind.sessionSetViewStyle(sessionId: sessionId, value: "");
     }
@@ -525,6 +523,46 @@ class _RawTouchGestureDetectorRegionState
       : (d) {
           _applyVerticalScrollFromDelta(d.delta);
         };
+
+  void _updateTwoFingerMode() {
+    // Hysteresis prevents a single misclassified update from locking the gesture.
+    switch (_twoFingerDirection) {
+      case TwoFingerDirection.same:
+        _scaleDirectionHits = 0;
+        _scrollDirectionHits++;
+        break;
+      case TwoFingerDirection.opposite:
+        _scrollDirectionHits = 0;
+        _scaleDirectionHits++;
+        break;
+      case TwoFingerDirection.unknown:
+        break;
+    }
+
+    if (isTwoFingerScrollMode &&
+        _scaleDirectionHits >= _twoFingerDirectionConfirmHits) {
+      isTwoFingerScrollMode = false;
+      isTwoFingerScaleMode = true;
+      _scrollDirectionHits = 0;
+      _scaleDirectionHits = 0;
+    } else if (isTwoFingerScaleMode &&
+        _scrollDirectionHits >= _twoFingerDirectionConfirmHits) {
+      isTwoFingerScaleMode = false;
+      isTwoFingerScrollMode = true;
+      _scrollDirectionHits = 0;
+      _scaleDirectionHits = 0;
+    } else if (!isTwoFingerScrollMode && !isTwoFingerScaleMode) {
+      if (_scrollDirectionHits >= _twoFingerDirectionConfirmHits) {
+        isTwoFingerScrollMode = true;
+        _scrollDirectionHits = 0;
+        _scaleDirectionHits = 0;
+      } else if (_scaleDirectionHits >= _twoFingerDirectionConfirmHits) {
+        isTwoFingerScaleMode = true;
+        _scrollDirectionHits = 0;
+        _scaleDirectionHits = 0;
+      }
+    }
+  }
 
   void _applyVerticalScrollFromDelta(Offset delta) {
     if (ffi.ffiModel.isPeerAndroid) {
@@ -592,6 +630,9 @@ class _RawTouchGestureDetectorRegionState
         instance
           ..onOneFingerPanUpdate = onOneFingerPanUpdate
           ..onOneFingerPanEnd = onOneFingerPanEnd
+          ..onTwoFingerDirectionChanged = (direction) {
+            _twoFingerDirection = direction;
+          }
           ..onTwoFingerScaleStart = onTwoFingerScaleStart
           ..onTwoFingerScaleUpdate = onTwoFingerScaleUpdate
           ..onTwoFingerScaleEnd = onTwoFingerScaleEnd

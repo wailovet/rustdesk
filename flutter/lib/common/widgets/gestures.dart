@@ -11,10 +11,17 @@ enum GestureState {
   threeFingerVerticalDrag
 }
 
+enum TwoFingerDirection {
+  unknown,
+  same,
+  opposite,
+}
+
 class CustomTouchGestureRecognizer extends ScaleGestureRecognizer {
   static const double _twoFingerSameDirAngleThresholdDeg = 45.0;
   final Map<int, Offset> _pointerPositions = <int, Offset>{};
   final Map<int, Offset> _pointerPrevPositions = <int, Offset>{};
+  ValueChanged<TwoFingerDirection>? onTwoFingerDirectionChanged;
   CustomTouchGestureRecognizer({
     Object? debugOwner,
     Set<PointerDeviceKind>? supportedDevices,
@@ -133,11 +140,15 @@ class CustomTouchGestureRecognizer extends ScaleGestureRecognizer {
     if (event is PointerDownEvent) {
       _pointerPositions[event.pointer] = event.position;
       _pointerPrevPositions[event.pointer] = event.position;
+      if (_pointerPositions.length != 2) {
+        _setTwoFingerDirection(TwoFingerDirection.unknown);
+      }
       return;
     }
     if (event is PointerMoveEvent) {
       _pointerPositions[event.pointer] = event.position;
       if (_pointerPositions.length != 2) {
+        _setTwoFingerDirection(TwoFingerDirection.unknown);
         return;
       }
       final entries = _pointerPositions.entries.toList(growable: false);
@@ -155,8 +166,9 @@ class CustomTouchGestureRecognizer extends ScaleGestureRecognizer {
       final cosValue = ((v1.dx * v2.dx + v1.dy * v2.dy) / (v1Len * v2Len))
           .clamp(-1.0, 1.0);
       final angleDeg = acos(cosValue) * 180 / pi;
-      isTwoFingerSameDirection =
-          angleDeg <= _twoFingerSameDirAngleThresholdDeg;
+      _setTwoFingerDirection(angleDeg <= _twoFingerSameDirAngleThresholdDeg
+          ? TwoFingerDirection.same
+          : TwoFingerDirection.opposite);
       _pointerPrevPositions[entries[0].key] = p1;
       _pointerPrevPositions[entries[1].key] = p2;
       return;
@@ -164,10 +176,14 @@ class CustomTouchGestureRecognizer extends ScaleGestureRecognizer {
     if (event is PointerUpEvent || event is PointerCancelEvent) {
       _pointerPositions.remove(event.pointer);
       _pointerPrevPositions.remove(event.pointer);
-      if (_pointerPositions.length < 2) {
-        isTwoFingerSameDirection = false;
+      if (_pointerPositions.length != 2) {
+        _setTwoFingerDirection(TwoFingerDirection.unknown);
       }
     }
+  }
+
+  void _setTwoFingerDirection(TwoFingerDirection direction) {
+    onTwoFingerDirectionChanged?.call(direction);
   }
 
   // FIXME: This debounce logic is not working properly.
