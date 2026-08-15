@@ -87,15 +87,16 @@ class RawTouchGestureDetectorRegion extends StatefulWidget {
 ///   HoldDrag -> left drag
 class _RawTouchGestureDetectorRegionState
     extends State<RawTouchGestureDetectorRegion> {
-  // Require several consistent updates before locking a two-finger mode.
-  static const int _twoFingerDirectionConfirmHits = 3;
+  // Accumulated movement required before treating a two-finger gesture as scroll.
+  static const double _twoFingerScrollThreshold = 30.0;
+  // Relative scale change required before treating a two-finger gesture as zoom.
+  static const double _twoFingerScaleThreshold = 0.15;
   // Two-finger scroll mode marker
   bool isTwoFingerScrollMode = false;
   // Two-finger scale mode marker
   bool isTwoFingerScaleMode = false;
-  TwoFingerDirection _twoFingerDirection = TwoFingerDirection.unknown;
-  int _scrollDirectionHits = 0;
-  int _scaleDirectionHits = 0;
+  bool _twoFingerGestureActive = false;
+  double _twoFingerScrollAccum = 0;
   Offset _cacheLongPressPosition = Offset(0, 0);
   // Timestamp of the last long press event.
   int _cacheLongPressPositionTs = 0;
@@ -441,8 +442,10 @@ class _RawTouchGestureDetectorRegionState
     }
     isTwoFingerScrollMode = false;
     isTwoFingerScaleMode = false;
-    _scrollDirectionHits = 0;
-    _scaleDirectionHits = 0;
+    _twoFingerGestureActive = true;
+    _twoFingerScrollAccum = 0;
+    _mouseScrollIntegral = 0;
+    _scale = 1;
     if (isSpecialHoldDragActive) {
       // Initialize the last focal point to calculate deltas manually.
       _lastSpecialHoldDragFocalPoint = d.focalPoint;
@@ -477,7 +480,24 @@ class _RawTouchGestureDetectorRegionState
       }
     } else {
       // mobile
-      _updateTwoFingerMode();
+      if (!_twoFingerGestureActive) {
+        isTwoFingerScrollMode = false;
+        isTwoFingerScaleMode = false;
+        _twoFingerScrollAccum = 0;
+        _scale = 1;
+        _twoFingerGestureActive = true;
+      }
+
+      if (!isTwoFingerScrollMode && !isTwoFingerScaleMode) {
+        if ((d.scale - 1.0).abs() >= _twoFingerScaleThreshold) {
+          isTwoFingerScaleMode = true;
+        } else {
+          _twoFingerScrollAccum += d.focalPointDelta.dy.abs();
+          if (_twoFingerScrollAccum >= _twoFingerScrollThreshold) {
+            isTwoFingerScrollMode = true;
+          }
+        }
+      }
 
       if (isTwoFingerScrollMode) {
         _applyVerticalScrollFromDelta(-d.focalPointDelta);
@@ -497,7 +517,10 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     if ((isDesktop || isWebDesktop)) {
-      if (widget.isCamera) return;
+      if (widget.isCamera) {
+        _twoFingerGestureActive = false;
+        return;
+      }
       await bind.sessionSendPointer(
           sessionId: sessionId,
           msg: json.encode(
@@ -507,11 +530,12 @@ class _RawTouchGestureDetectorRegionState
       _scale = 1;
       isTwoFingerScrollMode = false;
       isTwoFingerScaleMode = false;
-      _scrollDirectionHits = 0;
-      _scaleDirectionHits = 0;
+      _twoFingerScrollAccum = 0;
+      _mouseScrollIntegral = 0;
       // No idea why we need to set the view style to "" here.
       // bind.sessionSetViewStyle(sessionId: sessionId, value: "");
     }
+    _twoFingerGestureActive = false;
     if (!isSpecialHoldDragActive) {
       await inputModel.sendMouse('up', MouseButtons.left);
     }
@@ -523,46 +547,6 @@ class _RawTouchGestureDetectorRegionState
       : (d) {
           _applyVerticalScrollFromDelta(d.delta);
         };
-
-  void _updateTwoFingerMode() {
-    // Hysteresis prevents a single misclassified update from locking the gesture.
-    switch (_twoFingerDirection) {
-      case TwoFingerDirection.same:
-        _scaleDirectionHits = 0;
-        _scrollDirectionHits++;
-        break;
-      case TwoFingerDirection.opposite:
-        _scrollDirectionHits = 0;
-        _scaleDirectionHits++;
-        break;
-      case TwoFingerDirection.unknown:
-        break;
-    }
-
-    if (isTwoFingerScrollMode &&
-        _scaleDirectionHits >= _twoFingerDirectionConfirmHits) {
-      isTwoFingerScrollMode = false;
-      isTwoFingerScaleMode = true;
-      _scrollDirectionHits = 0;
-      _scaleDirectionHits = 0;
-    } else if (isTwoFingerScaleMode &&
-        _scrollDirectionHits >= _twoFingerDirectionConfirmHits) {
-      isTwoFingerScaleMode = false;
-      isTwoFingerScrollMode = true;
-      _scrollDirectionHits = 0;
-      _scaleDirectionHits = 0;
-    } else if (!isTwoFingerScrollMode && !isTwoFingerScaleMode) {
-      if (_scrollDirectionHits >= _twoFingerDirectionConfirmHits) {
-        isTwoFingerScrollMode = true;
-        _scrollDirectionHits = 0;
-        _scaleDirectionHits = 0;
-      } else if (_scaleDirectionHits >= _twoFingerDirectionConfirmHits) {
-        isTwoFingerScaleMode = true;
-        _scrollDirectionHits = 0;
-        _scaleDirectionHits = 0;
-      }
-    }
-  }
 
   void _applyVerticalScrollFromDelta(Offset delta) {
     if (ffi.ffiModel.isPeerAndroid) {
@@ -630,9 +614,6 @@ class _RawTouchGestureDetectorRegionState
         instance
           ..onOneFingerPanUpdate = onOneFingerPanUpdate
           ..onOneFingerPanEnd = onOneFingerPanEnd
-          ..onTwoFingerDirectionChanged = (direction) {
-            _twoFingerDirection = direction;
-          }
           ..onTwoFingerScaleStart = onTwoFingerScaleStart
           ..onTwoFingerScaleUpdate = onTwoFingerScaleUpdate
           ..onTwoFingerScaleEnd = onTwoFingerScaleEnd
