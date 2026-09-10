@@ -103,6 +103,8 @@ const String kOptionAllowAutoRecordOutgoing = "allow-auto-record-outgoing";
 const String kOptionVideoSaveDirectory = "video-save-directory";
 const String kOptionAccessMode = "access-mode";
 const String kOptionEnableKeyboard = "enable-keyboard";
+// Local only, stores the recently confirmed texts of the enhanced keyboard.
+const String kOptionKeyboardEnhanceHistory = "keyboard-enhance-history";
 // "Settings -> Security -> Permissions"
 const String kOptionEnableRemotePrinter = "enable-remote-printer";
 const String kOptionEnableClipboard = "enable-clipboard";

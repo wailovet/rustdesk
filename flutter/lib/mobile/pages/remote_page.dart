@@ -25,6 +25,7 @@ import '../../models/platform_model.dart';
 import '../../utils/image.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
+import '../widgets/keyboard_enhance.dart';
 
 final initText = '1' * 1024;
 
@@ -75,7 +76,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   late final StreamSubscription<bool> keyboardSubscription;
   final FocusNode _mobileFocusNode = FocusNode();
   final FocusNode _physicalFocusNode = FocusNode();
+  final FocusNode _enhancedFocusNode = FocusNode();
   var _showEdit = false; // use soft keyboard
+  var _showEnhancedKeyboard = false;
 
   InputModel get inputModel => gFFI.inputModel;
   SessionID get sessionId => gFFI.sessionId;
@@ -137,6 +140,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     await gFFI.invokeMethod("enable_soft_keyboard", true);
     _mobileFocusNode.dispose();
     _physicalFocusNode.dispose();
+    _enhancedFocusNode.dispose();
     await gFFI.close();
     _timer?.cancel();
     _timerDidChangeMetrics?.cancel();
@@ -211,7 +215,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       _timer = Timer(kMobileDelaySoftKeyboardFocus, () {
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
             overlays: SystemUiOverlay.values);
-        _mobileFocusNode.requestFocus();
+        // The plain keyboard entry is not mounted while the enhanced keyboard
+        // is active, requesting focus on it would drop the current focus.
+        if (_showEnhancedKeyboard) {
+          _enhancedFocusNode.requestFocus();
+        } else {
+          _mobileFocusNode.requestFocus();
+        }
       });
     }
     // update for Scaffold
@@ -329,10 +339,14 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   void openKeyboard() {
     gFFI.invokeMethod("enable_soft_keyboard", true);
+    _enhancedFocusNode.unfocus();
     // destroy first, so that our _value trick can work
     _value = initText;
     _textController.text = _value;
-    setState(() => _showEdit = false);
+    setState(() {
+      _showEnhancedKeyboard = false;
+      _showEdit = false;
+    });
     _timer?.cancel();
     _timer = Timer(kMobileDelaySoftKeyboard, () {
       // show now, and sleep a while to requestFocus to
@@ -347,6 +361,37 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     });
   }
 
+  /// Opens the soft keyboard together with a local text buffer. The text is
+  /// only sent to the peer when the user confirms it.
+  void openEnhancedKeyboard() {
+    gFFI.invokeMethod("enable_soft_keyboard", true);
+    _mobileFocusNode.unfocus();
+    setState(() {
+      _showEdit = false;
+      _showEnhancedKeyboard = true;
+    });
+    _timer?.cancel();
+    _timer = Timer(kMobileDelaySoftKeyboardFocus, () {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
+          overlays: SystemUiOverlay.values);
+      _enhancedFocusNode.requestFocus();
+    });
+  }
+
+  void closeEnhancedKeyboard() {
+    setState(() => _showEnhancedKeyboard = false);
+    _enhancedFocusNode.unfocus();
+    gFFI.invokeMethod("enable_soft_keyboard", false);
+    _physicalFocusNode.requestFocus();
+  }
+
+  void sendEnhancedText(String text) {
+    if (text.isEmpty) {
+      return;
+    }
+    bind.sessionInputString(sessionId: sessionId, value: text);
+  }
+
   Widget _bottomWidget() => _showGestureHelp
       ? getGestureHelp()
       : (_showBar && gFFI.ffiModel.pi.displays.isNotEmpty
@@ -355,8 +400,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final keyboardIsVisible =
-        keyboardVisibilityController.isVisible && _showEdit;
+    final keyboardIsVisible = keyboardVisibilityController.isVisible &&
+        (_showEdit || _showEnhancedKeyboard);
     final showActionButton = !_showBar || keyboardIsVisible || _showGestureHelp;
 
     return WillPopScope(
@@ -384,8 +429,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                     setState(() {
                       if (keyboardIsVisible) {
                         _showEdit = false;
+                        _showEnhancedKeyboard = false;
                         gFFI.invokeMethod("enable_soft_keyboard", false);
                         _mobileFocusNode.unfocus();
+                        _enhancedFocusNode.unfocus();
                         _physicalFocusNode.requestFocus();
                       } else if (_showGestureHelp) {
                         _showGestureHelp = false;
@@ -473,8 +520,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.max,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
-          Row(
-              children: <Widget>[
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                  children: <Widget>[
                     IconButton(
                       color: Colors.white,
                       icon: Icon(Icons.clear),
@@ -500,6 +550,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                   icon: Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
                               IconButton(
+                                  color: Colors.white,
+                                  icon: const Icon(Icons.text_fields),
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: translate('Keyboard Enhancement'),
+                                  onPressed: openEnhancedKeyboard),
+                              IconButton(
                                 color: Colors.white,
                                 icon: const Icon(Icons.build),
                                 onPressed: () => gFFI.dialogManager
@@ -511,6 +567,12 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                                   color: Colors.white,
                                   icon: Icon(Icons.keyboard),
                                   onPressed: openKeyboard),
+                              IconButton(
+                                  color: Colors.white,
+                                  icon: const Icon(Icons.text_fields),
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: translate('Keyboard Enhancement'),
+                                  onPressed: openEnhancedKeyboard),
                               IconButton(
                                 color: Colors.white,
                                 icon: Icon(gFFI.ffiModel.touchMode
@@ -549,6 +611,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       },
                     ),
                   ]),
+              ),
+            ),
+          ),
           Obx(() => IconButton(
                 color: Colors.white,
                 icon: Icon(Icons.expand_more),
@@ -575,18 +640,20 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         child: Stack(children: () {
           final paints = [
             ImagePaint(ffiModel: gFFI.ffiModel),
-            Positioned(
-              top: 10,
-              right: 10,
-              child: QualityMonitor(gFFI.qualityMonitorModel),
-            ),
+            if (!_showEnhancedKeyboard)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: QualityMonitor(gFFI.qualityMonitorModel),
+              ),
             KeyHelpTools(
                 keyboardIsVisible: keyboardIsVisible,
-                showGestureHelp: _showGestureHelp),
+                showGestureHelp: _showGestureHelp,
+                hidden: _showEnhancedKeyboard),
             SizedBox(
               width: 0,
               height: 0,
-              child: !_showEdit
+              child: !_showEdit || _showEnhancedKeyboard
                   ? Container()
                   : TextFormField(
                       textInputAction: TextInputAction.newline,
@@ -624,6 +691,19 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
           } else {
             paints.add(FloatingMouseWidgets(
               ffi: gFFI,
+            ));
+          }
+          // Keep the enhanced input bar above the canvas decorations.
+          if (_showEnhancedKeyboard) {
+            paints.add(Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: KeyboardEnhanceBar(
+                focusNode: _enhancedFocusNode,
+                onSendText: sendEnhancedText,
+                onClose: closeEnhancedKeyboard,
+              ),
             ));
           }
           return paints;
@@ -832,12 +912,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 class KeyHelpTools extends StatefulWidget {
   final bool keyboardIsVisible;
   final bool showGestureHelp;
+  /// Suppress the toolbar while another overlay (eg. the enhanced keyboard
+  /// input bar) needs the same area.
+  final bool hidden;
 
   /// need to show by external request, etc [keyboardIsVisible] or [changeTouchMode]
   bool get requestShow => keyboardIsVisible || showGestureHelp;
 
   KeyHelpTools(
-      {required this.keyboardIsVisible, required this.showGestureHelp});
+      {required this.keyboardIsVisible,
+      required this.showGestureHelp,
+      this.hidden = false});
 
   @override
   State<KeyHelpTools> createState() => _KeyHelpToolsState();
@@ -894,7 +979,7 @@ class _KeyHelpToolsState extends State<KeyHelpTools> {
         inputModel.shift ||
         inputModel.command;
 
-    if (!_pin && !hasModifierOn && !widget.requestShow) {
+    if (widget.hidden || (!_pin && !hasModifierOn && !widget.requestShow)) {
       gFFI.cursorModel
           .keyHelpToolsVisibilityChanged(null, widget.keyboardIsVisible);
       return Offstage();
