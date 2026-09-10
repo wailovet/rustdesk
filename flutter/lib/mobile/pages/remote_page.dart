@@ -613,7 +613,6 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                   ]),
               ),
             ),
-          ),
           Obx(() => IconButton(
                 color: Colors.white,
                 icon: Icon(Icons.expand_more),
