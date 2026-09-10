@@ -97,7 +97,9 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.carriez.flutter_hbb"
+        // Kept as a separate applicationId so this build can be installed
+        // alongside the official RustDesk package without touching its data.
+        applicationId "com.carriez.flutter_hbb.dev"
         minSdkVersion 22
         targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
