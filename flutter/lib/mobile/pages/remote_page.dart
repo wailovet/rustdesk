@@ -138,6 +138,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     gFFI.imageModel.disposeImage();
     gFFI.cursorModel.disposeImages();
     await gFFI.invokeMethod("enable_soft_keyboard", true);
+    gFFI.inputModel.localInputFocused = false;
     _mobileFocusNode.dispose();
     _physicalFocusNode.dispose();
     _enhancedFocusNode.dispose();
@@ -340,6 +341,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void openKeyboard() {
     gFFI.invokeMethod("enable_soft_keyboard", true);
     _enhancedFocusNode.unfocus();
+    inputModel.localInputFocused = false;
     // destroy first, so that our _value trick can work
     _value = initText;
     _textController.text = _value;
@@ -366,6 +368,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   void openEnhancedKeyboard() {
     gFFI.invokeMethod("enable_soft_keyboard", true);
     _mobileFocusNode.unfocus();
+    // Let the local input buffer own the keyboard instead of forwarding every
+    // keystroke to the remote peer.
+    inputModel.localInputFocused = true;
     setState(() {
       _showEdit = false;
       _showEnhancedKeyboard = true;
@@ -379,10 +384,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   }
 
   void closeEnhancedKeyboard() {
+    inputModel.localInputFocused = false;
     setState(() => _showEnhancedKeyboard = false);
     _enhancedFocusNode.unfocus();
     gFFI.invokeMethod("enable_soft_keyboard", false);
-    _physicalFocusNode.requestFocus();
+    // The remote key scope is rebuilt on the next frame, so restore focus after
+    // it is mounted again.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _physicalFocusNode.requestFocus();
+      }
+    });
   }
 
   void sendEnhancedText(String text) {
@@ -430,10 +442,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       if (keyboardIsVisible) {
                         _showEdit = false;
                         _showEnhancedKeyboard = false;
+                        inputModel.localInputFocused = false;
                         gFFI.invokeMethod("enable_soft_keyboard", false);
                         _mobileFocusNode.unfocus();
                         _enhancedFocusNode.unfocus();
-                        _physicalFocusNode.requestFocus();
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            _physicalFocusNode.requestFocus();
+                          }
+                        });
                       } else if (_showGestureHelp) {
                         _showGestureHelp = false;
                       } else {
@@ -502,7 +519,10 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       inputModel: inputModel,
       // Disable RawKeyFocusScope before the connecting is established.
       // The "Delete" key on the soft keyboard may be grabbed when inputting the password dialog.
-      child: gFFI.ffiModel.pi.isSet.isTrue
+      // Also disable it while the enhanced keyboard buffer is open: that buffer
+      // owns the keyboard, and this scope would otherwise consume Backspace
+      // before the text field could see it.
+      child: gFFI.ffiModel.pi.isSet.isTrue && !_showEnhancedKeyboard
           ? RawKeyFocusScope(
               focusNode: _physicalFocusNode,
               inputModel: inputModel,
@@ -536,7 +556,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       color: Colors.white,
                       icon: Icon(Icons.tv),
                       onPressed: () {
-                        setState(() => _showEdit = false);
+                        setState(() {
+                          _showEdit = false;
+                          _showEnhancedKeyboard = false;
+                        });
+                        inputModel.localInputFocused = false;
                         showOptions(context, widget.id, gFFI.dialogManager);
                       },
                     )
@@ -606,7 +630,11 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                       color: Colors.white,
                       icon: Icon(Icons.more_vert),
                       onPressed: () {
-                        setState(() => _showEdit = false);
+                        setState(() {
+                          _showEdit = false;
+                          _showEnhancedKeyboard = false;
+                        });
+                        inputModel.localInputFocused = false;
                         showActions(widget.id);
                       },
                     ),

@@ -360,6 +360,21 @@ class InputModel {
   bool _pointerMovedAfterEnter = false;
   bool _pointerInsideImage = false;
 
+  /// When true, local widgets (eg. the enhanced keyboard input buffer) own the
+  /// keyboard, so key events must not be forwarded to the remote peer.
+  bool _localInputFocused = false;
+  bool get localInputFocused => _localInputFocused;
+  set localInputFocused(bool value) {
+    if (_localInputFocused == value) {
+      return;
+    }
+    _localInputFocused = value;
+    if (value) {
+      // Avoid leaking a modifier that was pressed before entering the buffer.
+      resetModifiers();
+    }
+  }
+
   // mouse
   final isPhysicalMouse = false.obs;
   int _lastButtons = 0;
@@ -536,6 +551,7 @@ class InputModel {
   }
 
   KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
+    if (_localInputFocused) return KeyEventResult.ignored;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
@@ -595,6 +611,7 @@ class InputModel {
   }
 
   KeyEventResult handleKeyEvent(KeyEvent e) {
+    if (_localInputFocused) return KeyEventResult.ignored;
     if (isViewOnly) return KeyEventResult.handled;
     if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
